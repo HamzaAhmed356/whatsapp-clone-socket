@@ -1,14 +1,13 @@
+import { createServer } from "http";
 import { Server } from "socket.io";
-import dotenv from "dotenv";
 
-dotenv.config();
+const httpServer = createServer();
 
-const PORT = parseInt(process.env.PORT, 10) || 3002;
-
-const io = new Server(PORT, {
+const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || "*",
-    methods: ["GET", "POST"]
+    origin: ["http://localhost:3000", process.env.CLIENT_URL],
+    methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -25,25 +24,36 @@ const addUser = (userData, socketId) => {
 const removeUser = (socketId) => {
   users = users.filter((user) => user.socketId !== socketId);
 };
+
 const getUser = (userId) => {
-  return users.find((user) => user.sub == userId);
+  return users.find((user) => user.sub === userId);
 };
 
 io.on("connection", (socket) => {
-  console.log("User Connected:", socket.id);
+  console.log("Connected:", socket.id);
 
   socket.on("addUsers", (userData) => {
     addUser(userData, socket.id);
     io.emit("getUsers", users);
   });
 
+  socket.on("sendMessage", (data) => {
+    const user = getUser(data.receiverId);
+
+    if (user) {
+      io.to(user.socketId).emit("getMessage", data);
+    }
+  });
+
   socket.on("disconnect", () => {
     removeUser(socket.id);
     io.emit("getUsers", users);
-    console.log("User Disconnected:", socket.id);
+    console.log("Disconnected:", socket.id);
   });
-  socket.on("sendMessage", (data) => {
-    const user = getUser(data.receiverId);
-    io.to(user.socketId).emit("getMessage", data);
-  });
+});
+
+const PORT = process.env.PORT || 3002;
+
+httpServer.listen(PORT, () => {
+  console.log(`Socket Server Running on ${PORT}`);
 });
